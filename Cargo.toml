@@ -1,0 +1,17 @@
+[package]
+name = "tch-playground"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mnist"
+
+[dependencies]
+anyhow = "1"
+byteorder = "1"
+env_logger = "0.11"
+log = "0.4"
+rand = "0.8"
+tch = { version = "0.17", features = ["download-libtorch"] }
+thiserror = "1"
+tokio = { version = "1", features = ["full"] }
