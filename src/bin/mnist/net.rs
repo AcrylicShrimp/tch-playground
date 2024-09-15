@@ -18,7 +18,7 @@ impl Net {
         let conv1 = conv2d(
             vs,
             1,
-            32,
+            16,
             3,
             ConvConfig {
                 padding: 1,
@@ -26,11 +26,11 @@ impl Net {
                 ..Default::default()
             },
         );
-        let bn1 = batch_norm2d(vs, 32, Default::default());
+        let bn1 = batch_norm2d(vs, 16, Default::default());
         let conv2 = conv2d(
             vs,
+            16,
             32,
-            64,
             3,
             ConvConfig {
                 padding: 1,
@@ -38,8 +38,8 @@ impl Net {
                 ..Default::default()
             },
         );
-        let bn2 = batch_norm2d(vs, 64, Default::default());
-        let fc1 = linear(vs, 64 * 7 * 7, 1024, Default::default());
+        let bn2 = batch_norm2d(vs, 32, Default::default());
+        let fc1 = linear(vs, 32 * 7 * 7, 1024, Default::default());
         let fc2 = linear(vs, 1024, 10, Default::default());
         Self {
             conv1,

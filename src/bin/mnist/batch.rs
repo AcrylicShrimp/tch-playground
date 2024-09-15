@@ -1,4 +1,5 @@
 use crate::data::{MnistImage, MnistImageSet};
+use std::time::Duration;
 use tch::{Device, Tensor};
 use thiserror::Error;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -69,6 +70,7 @@ impl Drop for BatchGenerator {
     fn drop(&mut self) {
         if let Some(tx) = self.tx_stop.take() {
             let _ = tx.send(());
+            std::thread::sleep(Duration::from_millis(100));
         }
     }
 }

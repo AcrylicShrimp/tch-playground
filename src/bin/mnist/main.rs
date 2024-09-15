@@ -48,7 +48,18 @@ async fn main() -> Result<(), anyhow::Error> {
     let net = Net::new(&vs.root());
     let optimizer = Adam::default().build(&vs, 1e-3)?;
 
-    train(device, 10, 32, train_image_set, &test_batch, net, optimizer).await?;
+    train(
+        device,
+        10,
+        32,
+        train_image_set,
+        &test_batch,
+        net,
+        optimizer,
+        1e-3,
+        0.95,
+    )
+    .await?;
 
     Ok(())
 }
@@ -61,19 +72,17 @@ async fn train(
     test_batch: &Batch,
     net: Net,
     mut optimizer: Optimizer,
+    mut lr: f64,
+    lr_decay: f64,
 ) -> Result<(), anyhow::Error> {
     let mut batch_generator = BatchGenerator::new(device, batch_size, train_image_set)?;
+    optimizer.set_lr(lr);
 
     for epoch in 0..epochs {
         info!("============= epoch {}/{} =============", epoch + 1, epochs);
 
-        let logits = net.forward_t(&test_batch.images, false);
-        let labels = logits.argmax(-1, false);
-
-        let accuracy = labels.eq_tensor(&test_batch.labels).mean(Kind::Float);
-        let accuracy = f32::try_from(accuracy)?;
-
-        info!("test accuracy: {:.2}%", accuracy * 100.0);
+        let test_accuracy = compute_test_accuracy(&net, test_batch)?;
+        info!("test accuracy: {:.2}%", test_accuracy * 100.0);
 
         loop {
             let batch = batch_generator.next().await?;
@@ -85,7 +94,25 @@ async fn train(
             let loss = loss(&logits, &batch.labels);
             optimizer.backward_step(&loss);
         }
+
+        lr *= lr_decay;
+        optimizer.set_lr(lr);
+
+        info!("reduced learning rate: {}", lr);
     }
 
+    let test_accuracy = compute_test_accuracy(&net, test_batch)?;
+    info!("test accuracy: {:.2}%", test_accuracy * 100.0);
+
     Ok(())
+}
+
+fn compute_test_accuracy(net: &Net, test_batch: &Batch) -> Result<f32, anyhow::Error> {
+    let logits = net.forward_t(&test_batch.images, false);
+    let labels = logits.argmax(-1, false);
+
+    let accuracy = labels.eq_tensor(&test_batch.labels).mean(Kind::Float);
+    let accuracy = f32::try_from(accuracy)?;
+
+    Ok(accuracy)
 }
