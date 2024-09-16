@@ -9,7 +9,7 @@ use log::info;
 use loss::loss;
 use net::Net;
 use tch::{
-    nn::{Adam, ModuleT, Optimizer, OptimizerConfig, VarStore},
+    nn::{Adam, ModuleT, OptimizerConfig, VarStore},
     Device, Kind,
 };
 
@@ -29,7 +29,7 @@ async fn main() -> Result<(), anyhow::Error> {
     };
 
     info!("loading data...");
-    let train_image_set = load_mnist_image_set(
+    let mut train_image_set = load_mnist_image_set(
         "src/bin/mnist/data/train-images.idx3-ubyte",
         "src/bin/mnist/data/train-labels.idx1-ubyte",
     )?;
@@ -39,25 +39,28 @@ async fn main() -> Result<(), anyhow::Error> {
     )?;
     let test_batch = make_batch(
         device,
-        train_image_set.image_width,
-        train_image_set.image_height,
+        test_image_set.image_width,
+        test_image_set.image_height,
         &test_image_set.images,
     );
 
+    train_image_set.augment(0.15, 0.15);
+
     let vs = VarStore::new(device);
     let net = Net::new(&vs.root());
-    let optimizer = Adam::default().build(&vs, 1e-3)?;
+    let optimizer_config = Adam::default();
 
     train(
         device,
-        10,
+        20,
         32,
         train_image_set,
         &test_batch,
+        &vs,
         net,
-        optimizer,
+        optimizer_config,
         1e-3,
-        0.95,
+        0.9,
     )
     .await?;
 
@@ -70,13 +73,14 @@ async fn train(
     batch_size: usize,
     train_image_set: MnistImageSet,
     test_batch: &Batch,
+    vs: &VarStore,
     net: Net,
-    mut optimizer: Optimizer,
+    optimizer: impl OptimizerConfig,
     mut lr: f64,
     lr_decay: f64,
 ) -> Result<(), anyhow::Error> {
+    let mut optimizer = optimizer.build(vs, lr)?;
     let mut batch_generator = BatchGenerator::new(device, batch_size, train_image_set)?;
-    optimizer.set_lr(lr);
 
     for epoch in 0..epochs {
         info!("============= epoch {}/{} =============", epoch + 1, epochs);

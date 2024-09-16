@@ -1,3 +1,6 @@
+mod augment;
+
+use augment::{augment_erase_patch, augment_translate};
 use byteorder::{BigEndian, ReadBytesExt};
 use rand::seq::SliceRandom;
 use std::{fs::OpenOptions, io::Read, path::Path};
@@ -27,6 +30,35 @@ pub struct MnistImageSet {
 impl MnistImageSet {
     pub fn shuffle(&mut self) {
         self.images.shuffle(&mut rand::thread_rng());
+    }
+
+    pub fn augment(&mut self, ratio_translate: f32, ratio_erase_patch: f32) {
+        let mut augmented = Vec::new();
+
+        if 0.0 < ratio_translate {
+            self.shuffle();
+            let target_len = (self.images.len() as f32 * ratio_translate) as usize;
+            let target_len = target_len.max(self.images.len());
+            let target = augment_translate(
+                self.image_width,
+                self.image_height,
+                &self.images[..target_len],
+            );
+            augmented.extend(target);
+        }
+
+        if 0.0 < ratio_erase_patch {
+            let target_len = (self.images.len() as f32 * ratio_erase_patch) as usize;
+            let target_len = target_len.max(self.images.len());
+            let target = augment_erase_patch(
+                self.image_width,
+                self.image_height,
+                &self.images[..target_len],
+            );
+            augmented.extend(target);
+        }
+
+        self.images.extend(augmented);
     }
 }
 
