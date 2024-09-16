@@ -22,6 +22,7 @@ pub struct BatchGenerator {
 
 #[derive(Debug)]
 pub struct Batch {
+    #[allow(dead_code)]
     pub size: usize,
     pub images: Tensor,
     pub labels: Tensor,

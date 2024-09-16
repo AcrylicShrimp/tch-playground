@@ -2,16 +2,17 @@ mod batch;
 mod data;
 mod loss;
 mod net;
+mod trainer;
 
-use batch::{make_batch, Batch, BatchGenerator};
-use data::{load_mnist_image_set, MnistImageSet};
+use batch::make_batch;
+use data::load_mnist_image_set;
 use log::info;
-use loss::loss;
 use net::Net;
 use tch::{
-    nn::{Adam, ModuleT, OptimizerConfig, VarStore},
-    Device, Kind,
+    nn::{Adam, VarStore},
+    Device,
 };
+use trainer::{LearningRateScheduler, Trainer};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -48,75 +49,18 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let vs = VarStore::new(device);
     let net = Net::new(&vs.root());
-    let optimizer_config = Adam::default();
-
-    train(
-        device,
-        20,
-        32,
-        train_image_set,
-        &test_batch,
+    let mut trainer = Trainer::new(
         &vs,
         net,
-        optimizer_config,
-        1e-3,
-        0.9,
-    )
-    .await?;
+        Adam::default(),
+        LearningRateScheduler::new(1e-3, 0.9),
+    )?;
+
+    let final_accuracy = trainer.train(20, 32, train_image_set, &test_batch).await?;
+
+    info!("================================================");
+    info!("final accuracy: {:.2}%", final_accuracy * 100.0);
+    info!("================================================");
 
     Ok(())
-}
-
-async fn train(
-    device: Device,
-    epochs: usize,
-    batch_size: usize,
-    train_image_set: MnistImageSet,
-    test_batch: &Batch,
-    vs: &VarStore,
-    net: Net,
-    optimizer: impl OptimizerConfig,
-    mut lr: f64,
-    lr_decay: f64,
-) -> Result<(), anyhow::Error> {
-    let mut optimizer = optimizer.build(vs, lr)?;
-    let mut batch_generator = BatchGenerator::new(device, batch_size, train_image_set)?;
-
-    for epoch in 0..epochs {
-        info!("============= epoch {}/{} =============", epoch + 1, epochs);
-
-        let test_accuracy = compute_test_accuracy(&net, test_batch)?;
-        info!("test accuracy: {:.2}%", test_accuracy * 100.0);
-
-        loop {
-            let batch = batch_generator.next().await?;
-            let batch = match batch {
-                Some(batch) => batch,
-                None => break,
-            };
-            let logits = net.forward_t(&batch.images, true);
-            let loss = loss(&logits, &batch.labels);
-            optimizer.backward_step(&loss);
-        }
-
-        lr *= lr_decay;
-        optimizer.set_lr(lr);
-
-        info!("reduced learning rate: {}", lr);
-    }
-
-    let test_accuracy = compute_test_accuracy(&net, test_batch)?;
-    info!("test accuracy: {:.2}%", test_accuracy * 100.0);
-
-    Ok(())
-}
-
-fn compute_test_accuracy(net: &Net, test_batch: &Batch) -> Result<f32, anyhow::Error> {
-    let logits = net.forward_t(&test_batch.images, false);
-    let labels = logits.argmax(-1, false);
-
-    let accuracy = labels.eq_tensor(&test_batch.labels).mean(Kind::Float);
-    let accuracy = f32::try_from(accuracy)?;
-
-    Ok(accuracy)
 }
